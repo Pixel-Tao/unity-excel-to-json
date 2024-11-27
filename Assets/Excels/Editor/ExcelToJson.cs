@@ -57,12 +57,9 @@ public class ExcelToJson
             $"{excelDirPath}/json_output"
         );
         bool allowMultipleSheets = config.ContainsKey("allowMultipleSheets") && config["allowMultipleSheets"].ToLower() == "true";
-        bool useResources = config.ContainsKey("useResources") && config["useResources"].ToLower() == "true";
-        bool useAddressables = config.ContainsKey("useAddressables") && config["useAddressables"].ToLower() == "true";
         string excelDirectoryPath = ValidateOrCreateDirectory(config, $"excelDirectoryPath", defaultExcelDirectoryPath);
         string loaderOutputDirectory = ValidateOrCreateDirectory(config, "loaderOutputDirectory", defaultLoaderOutputDirectory);
         string jsonOutputDirectory = ValidateOrCreateDirectory(config, "jsonOutputDirectory", defaultJsonOutputDirectory);
-        string resourcesInternalPath = config.ContainsKey("resourcesInternalPath") ? config["resourcesInternalPath"] : "JSON";
         string logDirPath = "excel_logs";
         if (Directory.Exists(logDirPath) == false)
             Directory.CreateDirectory(logDirPath);
@@ -76,30 +73,8 @@ public class ExcelToJson
             loaderOutputDirectory,
             jsonOutputDirectory,
             logFilePath,
-            allowMultipleSheets,
-            useResources,
-            resourcesInternalPath,
-            useAddressables
+            allowMultipleSheets
         );
-
-        if (useResources)
-        {
-            if (Directory.Exists($"Assets/Resources") == false)
-                Directory.CreateDirectory($"Assets/Resources");
-
-            if (Directory.Exists(jsonOutputDirectory))
-            {
-                string[] files = Directory.GetFiles(jsonOutputDirectory, "*.json");
-                foreach (var file in files)
-                {
-                    string destFilePath = $"Assets/Resources/{resourcesInternalPath}/{Path.GetFileName(file)}";
-                    if (File.Exists(destFilePath))
-                        File.Delete(destFilePath);
-
-                    File.Move(file, destFilePath);
-                }
-            }
-        }
 
         AssetDatabase.Refresh();
         Debug.Log("Excel to Json conversion complete.");
@@ -136,8 +111,6 @@ public class ExcelToJson
             config["loaderOutputDirectory"] = "Excels/loader_output";
             config["jsonOutputDirectory"] = "Excels/json_output";
             config["allowMultipleSheets"] = "false";
-            config["useResources"] = "true";
-            config["resourcesInternalPath"] = "JSON";
             config["useAssets"] = "true";
             config["useAddressables"] = "false";
 
@@ -162,16 +135,8 @@ public class ExcelToJson
                 sw.WriteLine("allowMultipleSheets=false # 다중 시트를 허용할지 여부 (true/false)");
                 sw.WriteLine();
 
-                sw.WriteLine("# JSON Resources 사용 설정");
-                sw.WriteLine("useResources=true # Resources 폴더 사용 여부 (true/false)");
-                sw.WriteLine("resourcesInternalPath=JSON # Resources 내부 경로");
-                sw.WriteLine();
-
                 sw.WriteLine("# Assets 사용 설정 (Root 폴더가 Assets인 경우 true)");
                 sw.WriteLine("useAssets=true # Assets 폴더 사용 여부 (true/false)");
-
-                sw.WriteLine("# Addressables 사용 설정 (Addressables를 사용하는 경우 true)");
-                sw.WriteLine("useAddressables=false # Addressables 사용 여부 (true/false)");
 
             }
 
@@ -309,8 +274,7 @@ public class ExcelToJson
         return enumDefinitions;
     }
 
-    static void ProcessExcelFiles(string excelDir, string loaderDir, string jsonDir, string logFilePath, bool allowMultipleSheets,
-        bool useResources, string resourcesInternalPath, bool useAddressables)
+    static void ProcessExcelFiles(string excelDir, string loaderDir, string jsonDir, string logFilePath, bool allowMultipleSheets)
     {
         var excelFiles = Directory.GetFiles(excelDir, "*.xlsx");
 
@@ -335,9 +299,6 @@ public class ExcelToJson
                 jsonDir,
                 logFilePath,
                 allowMultipleSheets,
-                useResources,
-                resourcesInternalPath,
-                useAddressables,
                 out string className
             );
             classNames.Add(className);
@@ -430,6 +391,8 @@ public class ExcelToJson
         sb.AppendLine("{");
         sb.AppendLine("    private Dictionary<string, JsonLoader> _loaders = new Dictionary<string, JsonLoader>();");
         sb.AppendLine();
+        sb.AppendLine("    // loadFunc is json file loader function");
+        sb.AppendLine("    // ex) Func<string, TextAsset> loadFunc = () => Resources.Load<TextAsset>();");
         sb.AppendLine("    public DataLoader(Func<string, TextAsset> loadFunc)");
         sb.AppendLine("    {");
         foreach (var className in classNames)
@@ -502,7 +465,7 @@ public class ExcelToJson
         }
     }
     static bool GenerateClassAndJsonFromExcel(string excelPath, string loaderDir, string jsonDir, string logFilePath,
-        bool allowMultipleSheets, bool useResources, string resourcesInternalPath, bool useAddressables, out string className)
+        bool allowMultipleSheets, out string className)
     {
         className = null;
         try
@@ -662,7 +625,6 @@ public class ExcelToJson
                     var loaderOutputPath = Path.Combine(loaderDir, $"{className}.cs");
                     File.WriteAllText(loaderOutputPath, classCode);
                     Debug.Log($"Class file generated at {className}");
-
                     var jsonOutputPath = Path.Combine(jsonDir, $"{className}.json");
                     var wrapper = new { Items = jsonArray };
                     var settings = new JsonSerializerSettings

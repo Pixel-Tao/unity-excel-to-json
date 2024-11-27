@@ -23,26 +23,26 @@
 (기본 구성을 바탕으로 설명합니다.)
 1. Excels/excel_files 폴더에 변환하고자 하는 Excel 파일을 넣어 둡니다. (Enum 값이 필요하다면 Enum.xlsx 파일도 함께 포함하세요.)
 2. 엑셀 내에서는 다음과 같이 필드를 정의합니다.
-   1번 줄 : header (field name)
-   2번 줄 : type (field type : int, string, Enum<Type>, float, long, double, bool, List<type>)
-   3번 줄 : description (field description)
+   - 1번 줄 : header (field name)
+   - 2번 줄 : type (field type : int, string, Enum<Type>, float, long, double, bool, List<type>)
+   - 3번 줄 : description (field description)
 3. 엑셀 내 A1 Cell은 'key' A2 Cell은 int 로 입력하고 나머지 필요한 데이터를 채워 줍니다.
 4. Enum 타입의 경우 다음과 같이 정의합니다.
-   A 열 : name (enum name)
-   B 열 ~ @ : value (enum value)
+   - A 열 : name (enum name)
+   - B 열 ~ @ : value (enum value)
 5. DataLoader.cs 를 사용하려면 다음과 같은 예시로 인스턴스를 생성하여 사용합니다.
-   ```cs
-   public class DBManager : MonoBehaviour
-   {
-     private DataLoader _loader;
-     private Func<string, TextAsset> _loadFunc = value => Resources.Load<TextAsset>(value);
-        
-     void Start()
-     {
-       _loader = new DataLoader(_loadFunc);
-     }
-   }
-   ```
+```cs
+public class DBManager : MonoBehaviour
+{
+  private DataLoader _loader;
+  private Func<string, TextAsset> _loadFunc = value => Resources.Load<TextAsset>(value);
+     
+  void Start()
+  {
+    _loader = new DataLoader(_loadFunc);
+  }
+}
+```
 6. allowMultipleSheets 옵션을 사용하게 되면 json과 cs 에
 - json_output/ExcelName_SheetName.json
 - loader_output/ExcelName_SheetName.cs

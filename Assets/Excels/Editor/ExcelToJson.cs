@@ -112,7 +112,6 @@ public class ExcelToJson
             config["jsonOutputDirectory"] = "Excels/json_output";
             config["allowMultipleSheets"] = "false";
             config["useAssets"] = "true";
-            config["useAddressables"] = "false";
 
             using (var sw = File.CreateText(configFilePath))
             {

@@ -19,6 +19,9 @@
 3. Assets 폴더 내 Excels 폴더를 대상으로 컨텍스트 메뉴를 열고 Excel to Json 기능을 실행합니다.
 4. 그럼 사용 준비가 완료 됩니다.
 
+# 필수 요구 패키지
+- Newtonsoft Json (com.unity.nuget.newtonsoft-json)
+
 # 사용 방법
 (기본 구성을 바탕으로 설명합니다.)
 1. Excels/excel_files 폴더에 변환하고자 하는 Excel 파일을 넣어 둡니다. (Enum 값이 필요하다면 Enum.xlsx 파일도 함께 포함하세요.)

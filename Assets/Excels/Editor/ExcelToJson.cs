@@ -219,21 +219,35 @@ public class ExcelToJson
                     throw new Exception($"Sheet '{_excelEnumSheetName}' not found in Enum definitions file.");
                 }
 
-                for (int i = 0; i <= worksheet.LastRowNum; i++)
+                for (int i = 0; i <= worksheet.LastRowNum; i += 2)
                 {
                     IRow row = worksheet.GetRow(i);
+                    IRow descRow = worksheet.GetRow(i + 1);
                     // first cell is the enum name
                     ICell entryCell = row.GetCell(0);
+                    ICell descCell = descRow.GetCell(0);
                     if (entryCell == null || entryCell.CellType == CellType.Blank) break;
+                    if (descCell == null || descCell.CellType == CellType.Blank) break;
                     string enumName = GetCellText(entryCell);
+                    string enumDesc = GetCellText(worksheet.GetRow(i + 1).GetCell(0));
                     if (enumDefinitions.ContainsKey(enumName))
                     {
                         throw new Exception($"Duplicate enum name '{enumName}' found in Enum definitions.");
                     }
+                    if (!enumDesc.StartsWith("#"))
+                    {
+                        continue;
+                    }
 
                     var enumValues = new Dictionary<string, int>();
                     int index = 0;
-
+                    sb.AppendLine($"    /// <summary>");
+                    string[] descLines = enumDesc.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+                    foreach (var line in descLines)
+                    {
+                        sb.AppendLine($"    /// {line}");
+                    }
+                    sb.AppendLine($"    /// </summary>");
                     sb.AppendLine($"    public enum {enumName}");
                     sb.AppendLine("    {");
 
@@ -249,6 +263,13 @@ public class ExcelToJson
                         }
 
                         enumValues[value] = index;
+                        string[] valueDescLines = GetCellText(descRow.GetCell(col)).Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+                        sb.AppendLine($"        /// <summary>");
+                        foreach (var line in valueDescLines)
+                        {
+                            sb.AppendLine($"        /// {line}");
+                        }
+                        sb.AppendLine($"        /// </summary>");
                         sb.AppendLine($"        {value} = {index},");
                         index++;
                     }
@@ -549,7 +570,11 @@ public class ExcelToJson
                         }
 
                         sb.AppendLine($"    /// <summary>");
-                        sb.AppendLine($"    /// {description}");
+                        string[] lines = description.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+                        foreach (var line in lines)
+                        {
+                            sb.AppendLine($"    /// {line}");
+                        }
                         sb.AppendLine($"    /// </summary>");
                         sb.AppendLine($"    public {dataType} {variableName};");
                         sb.AppendLine();

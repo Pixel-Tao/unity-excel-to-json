@@ -307,7 +307,8 @@ public class ExcelToJson
         foreach (var excelFilePath in excelFiles)
         {
             if (Path.GetFileName(excelFilePath).StartsWith("~") ||
-                Path.GetFileName(excelFilePath).Equals("Enum.xlsx", StringComparison.OrdinalIgnoreCase))
+                Path.GetFileName(excelFilePath).Equals("Enum.xlsx", StringComparison.OrdinalIgnoreCase) ||
+                Path.GetFileName(excelFilePath).EndsWith(".meta"))
             {
                 Debug.Log($"Skipping file: {excelFilePath}\n");
                 continue;

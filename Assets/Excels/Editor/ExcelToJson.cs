@@ -527,6 +527,12 @@ public class ExcelToJson
                 return null;
         }
     }
+    static string FirstCharToUpper(string str)
+    {
+        if (string.IsNullOrEmpty(str))
+            return str;
+        return char.ToUpper(str[0]) + str.Substring(1);
+    }
     static bool GenerateClassAndJsonFromExcel(string excelPath, string loaderDir, string jsonDir, string logFilePath,
         bool allowMultipleSheets, bool useGroups, string groupSingleSuffix, string groupListSuffix, out string className)
     {
@@ -645,14 +651,14 @@ public class ExcelToJson
                     {
                         foreach (var singleMapping in singleMappings)
                         {
-                            var singleMappingName = singleMapping.Replace(groupSingleSuffix, "");
-                            sb.AppendLine($"    public Dictionary<string, {className}> {singleMappingName}Dict {{ get; private set; }} = new Dictionary<string, {className}>();");
+                            var singleMappingName = FirstCharToUpper(singleMapping.Replace(groupSingleSuffix, ""));
+                            sb.AppendLine($"    public Dictionary<string, {className}> {singleMappingName}SingleDict {{ get; private set; }} = new Dictionary<string, {className}>();");
                         }
                         
                         foreach (var listMapping in listMappings)
                         {
-                            var listMappingName = listMapping.Replace(groupListSuffix, "");
-                            sb.AppendLine($"    public Dictionary<string, List<{className}>> {listMappingName}Dict {{ get; private set; }} = new Dictionary<string, List<{className}>>();");
+                            var listMappingName = FirstCharToUpper(listMapping.Replace(groupListSuffix, ""));
+                            sb.AppendLine($"    public Dictionary<string, List<{className}>> {listMappingName}ListDict {{ get; private set; }} = new Dictionary<string, List<{className}>>();");
                         }
                     }
                     
@@ -673,23 +679,23 @@ public class ExcelToJson
                         sb.AppendLine("        {");
                         foreach (var singleMapping in singleMappings)
                         {
-                            var singleMappingName = singleMapping.Replace(groupSingleSuffix, "");
-                            sb.AppendLine($"            if ({singleMappingName}Dict.ContainsKey(item.{singleMapping}))");
+                            var singleMappingName = FirstCharToUpper(singleMapping.Replace(groupSingleSuffix, ""));
+                            sb.AppendLine($"            if ({singleMappingName}SingleDict.ContainsKey(item.{singleMapping}))");
                             sb.AppendLine($"            {{");
-                            sb.AppendLine($"                Debug.LogError($\"Duplicate key '{{item.{singleMapping}}}' found in {singleMappingName}Dict\");");
+                            sb.AppendLine($"                Debug.LogError($\"Duplicate key '{{item.{singleMapping}}}' found in {singleMappingName}SingleDict\");");
                             sb.AppendLine("                 continue;");
                             sb.AppendLine($"            }}");
-                            sb.AppendLine($"            {singleMappingName}Dict.Add(item.{singleMapping}, item);");
+                            sb.AppendLine($"            {singleMappingName}SingleDict.Add(item.{singleMapping}, item);");
                         }
                         
                         foreach (var listMapping in listMappings)
                         {
-                            var listMappingName = listMapping.Replace(groupListSuffix, "");
-                            sb.AppendLine($"            if (!{listMappingName}Dict.ContainsKey(item.{listMapping}))");
+                            var listMappingName = FirstCharToUpper(listMapping.Replace(groupListSuffix, ""));
+                            sb.AppendLine($"            if (!{listMappingName}ListDict.ContainsKey(item.{listMapping}))");
                             sb.AppendLine($"            {{");
-                            sb.AppendLine($"                {listMappingName}Dict[item.{listMapping}] = new List<{className}>();");
+                            sb.AppendLine($"                {listMappingName}ListDict[item.{listMapping}] = new List<{className}>();");
                             sb.AppendLine($"            }}");
-                            sb.AppendLine($"            {listMappingName}Dict[item.{listMapping}].Add(item);");
+                            sb.AppendLine($"            {listMappingName}ListDict[item.{listMapping}].Add(item);");
                         }
                         sb.AppendLine("        }");
                     }

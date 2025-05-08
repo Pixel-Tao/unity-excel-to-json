@@ -9,5 +9,11 @@ public class DBManager : MonoBehaviour
     // void Start()
     // {
     //     _loader = new DataLoader(_loadFunc);
+    //
+    //     Example_MainGroupLoader loader = _loader.GetLoader<Example_MainGroupLoader>();
+    //     foreach (var item in loader.testDict)
+    //     {
+    //         Debug.Log(item.Key + " : " + item.Value.name);
+    //     }
     // }
 }

@@ -8,12 +8,22 @@ using Newtonsoft.Json;
 using NPOI.HSSF.UserModel;
 using NPOI.XSSF.UserModel;
 using NPOI.SS.UserModel;
+using Unity.VisualScripting;
 using UnityEditor;
 using UnityEngine;
 using Object = System.Object;
 
 public class ExcelToJson
 {
+    class Relationship
+    {
+        public string MainExcelName { get; set; }
+        public string MainFieldName { get; set; }
+        public string RelationType { get; set; }
+        
+        public string TargetExcelName { get; set; }
+        public string TargetFieldName { get; set; }
+    }
     private static readonly string _assetExcelDirPath = "Assets/Excels";
     private static readonly string _excelDirPath = "Excels";
     private static readonly string _excelEnumSheetName = "Enum";
@@ -57,6 +67,11 @@ public class ExcelToJson
             $"{excelDirPath}/json_output"
         );
         bool allowMultipleSheets = config.ContainsKey("allowMultipleSheets") && config["allowMultipleSheets"].ToLower() == "true";
+        bool useGroups = config.ContainsKey("useGroups") && config["useGroups"].ToLower() == "true";
+        
+        string groupSingleSuffix = config.ContainsKey("groupSingleSuffix") ? config["groupSingleSuffix"] : "SingleCode";
+        string groupListSuffix = config.ContainsKey("groupListSuffix") ? config["groupListSuffix"] : "GroupCode";
+        
         string excelDirectoryPath = ValidateOrCreateDirectory(config, $"excelDirectoryPath", defaultExcelDirectoryPath);
         string loaderOutputDirectory = ValidateOrCreateDirectory(config, "loaderOutputDirectory", defaultLoaderOutputDirectory);
         string jsonOutputDirectory = ValidateOrCreateDirectory(config, "jsonOutputDirectory", defaultJsonOutputDirectory);
@@ -73,7 +88,10 @@ public class ExcelToJson
             loaderOutputDirectory,
             jsonOutputDirectory,
             logFilePath,
-            allowMultipleSheets
+            allowMultipleSheets,
+            useGroups,
+            groupSingleSuffix,
+            groupListSuffix
         );
 
         AssetDatabase.Refresh();
@@ -112,6 +130,9 @@ public class ExcelToJson
             config["jsonOutputDirectory"] = "Excels/json_output";
             config["allowMultipleSheets"] = "false";
             config["useAssets"] = "true";
+            config["useGroups"] = "false";
+            config["groupSingleSuffix"] = "SingleCode";
+            config["groupListSuffix"] = "ListCode";
 
             using (var sw = File.CreateText(configFilePath))
             {
@@ -136,6 +157,12 @@ public class ExcelToJson
 
                 sw.WriteLine("# Assets 사용 설정 (Root 폴더가 Assets인 경우 true)");
                 sw.WriteLine("useAssets=true # Assets 폴더 사용 여부 (true/false)");
+                sw.WriteLine();
+                
+                sw.WriteLine("# 관계 설정");
+                sw.WriteLine("useGroups=false # 관계 설정 (true/false)");
+                sw.WriteLine("groupSingleSuffix=SingleCode # 고유 Code 필드명 (ex: Dictionary<string, Entity>)");
+                sw.WriteLine("groupListSuffix=ListCode # 그룹 Code 필드명 (ex: Dictionary<string, List<Entity>>)");
 
             }
 
@@ -294,7 +321,7 @@ public class ExcelToJson
         return enumDefinitions;
     }
 
-    static void ProcessExcelFiles(string excelDir, string loaderDir, string jsonDir, string logFilePath, bool allowMultipleSheets)
+    static void ProcessExcelFiles(string excelDir, string loaderDir, string jsonDir, string logFilePath, bool allowMultipleSheets, bool useGroups, string groupSingleSuffix, string groupListSuffix)
     {
         var excelFiles = Directory.GetFiles(excelDir, "*.xlsx");
 
@@ -308,6 +335,7 @@ public class ExcelToJson
         {
             if (Path.GetFileName(excelFilePath).StartsWith("~") ||
                 Path.GetFileName(excelFilePath).Equals("Enum.xlsx", StringComparison.OrdinalIgnoreCase) ||
+                Path.GetFileName(excelFilePath).Equals("Relationships.xlsx", StringComparison.OrdinalIgnoreCase) ||
                 Path.GetFileName(excelFilePath).EndsWith(".meta"))
             {
                 Debug.Log($"Skipping file: {excelFilePath}\n");
@@ -320,6 +348,9 @@ public class ExcelToJson
                 jsonDir,
                 logFilePath,
                 allowMultipleSheets,
+                useGroups,
+                groupSingleSuffix,
+                groupListSuffix,
                 out string className
             );
             classNames.Add(className);
@@ -368,7 +399,7 @@ public class ExcelToJson
         sb.AppendLine("    public List<BaseJsonData> ItemsList { get; protected set; }");
         sb.AppendLine("    public Dictionary<int, BaseJsonData> ItemsDict { get; protected set; }");
         sb.AppendLine();
-        sb.AppendLine("    protected void AddDatas<T>(List<T> items) where T : BaseJsonData");
+        sb.AppendLine("    protected virtual void AddDatas<T>(List<T> items) where T : BaseJsonData");
         sb.AppendLine("    {");
         sb.AppendLine("        ItemsList = items.ConvertAll(x => x as BaseJsonData);");
         sb.AppendLine("        ItemsDict = new Dictionary<int, BaseJsonData>();");
@@ -458,12 +489,23 @@ public class ExcelToJson
         sb.AppendLine("        }");
         sb.AppendLine("        return null;");
         sb.AppendLine("    }");
+        sb.AppendLine();
+        sb.AppendLine("    public T GetLoader<T>() where T : JsonLoader");
+        sb.AppendLine("    {");
+        sb.AppendLine("        string name = typeof(T).Name.TrimEnd(\"Loader\".ToCharArray());");
+        sb.AppendLine("        if (_loaders.ContainsKey(name))");
+        sb.AppendLine("        {");
+        sb.AppendLine("            return _loaders[name] as T;");
+        sb.AppendLine("        }");
+        sb.AppendLine("        return null;");
+        sb.AppendLine("    }");
         sb.AppendLine("}");
         
         var dataLoaderOutputPath = Path.Combine(loaderDir, "DataLoader.cs");
         File.WriteAllText(dataLoaderOutputPath, sb.ToString());
         Debug.Log($"Main loader file generated at {dataLoaderOutputPath}");
     }
+
     
     static string GetCellText(ICell cell)
     {
@@ -486,15 +528,18 @@ public class ExcelToJson
         }
     }
     static bool GenerateClassAndJsonFromExcel(string excelPath, string loaderDir, string jsonDir, string logFilePath,
-        bool allowMultipleSheets, out string className)
+        bool allowMultipleSheets, bool useGroups, string groupSingleSuffix, string groupListSuffix, out string className)
     {
         className = null;
         try
         {
             emptyValueDetectedInFile = false; // 새로운 파일을 처리할 때마다 초기화
-
+            
             IWorkbook workbook = LoadBook(excelPath);
             IEnumerable<ISheet> sheets = allowMultipleSheets ? LoadSheets(workbook) : new[] { workbook.GetSheetAt(0) };
+            
+            List<string> singleMappings = new List<string>();
+            List<string> listMappings = new List<string>();
 
             foreach (var worksheet in sheets)
             {
@@ -569,6 +614,17 @@ public class ExcelToJson
                             }
                             dataType = $"List<DesignEnums.{enumTypeName}>";
                         }
+                        
+                        if (useGroups && variableName.ToLower().EndsWith(groupSingleSuffix.ToLower()) && dataType == "string")
+                        {
+                            if (!singleMappings.Contains(variableName))
+                                singleMappings.Add(variableName);
+                        }
+                        else if (useGroups && variableName.ToLower().EndsWith(groupListSuffix.ToLower()) && dataType == "string")
+                        {
+                            if (!listMappings.Contains(variableName))
+                                listMappings.Add(variableName);
+                        }
 
                         sb.AppendLine($"    /// <summary>");
                         string[] lines = description.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
@@ -585,6 +641,22 @@ public class ExcelToJson
 
                     sb.AppendLine($"public class {className}Loader : JsonLoader");
                     sb.AppendLine("{");
+                    if (useGroups)
+                    {
+                        foreach (var singleMapping in singleMappings)
+                        {
+                            var singleMappingName = singleMapping.Replace(groupSingleSuffix, "");
+                            sb.AppendLine($"    public Dictionary<string, {className}> {singleMappingName}Dict {{ get; private set; }} = new Dictionary<string, {className}>();");
+                        }
+                        
+                        foreach (var listMapping in listMappings)
+                        {
+                            var listMappingName = listMapping.Replace(groupListSuffix, "");
+                            sb.AppendLine($"    public Dictionary<string, List<{className}>> {listMappingName}Dict {{ get; private set; }} = new Dictionary<string, List<{className}>>();");
+                        }
+                    }
+                    
+                    
                     sb.AppendLine($"    public {className}Loader(Func<string, TextAsset> loadFunc)");
                     sb.AppendLine("    {");
                     sb.AppendLine($"        AddDatas(loadFunc(nameof({className})).text);");
@@ -592,7 +664,35 @@ public class ExcelToJson
                     sb.AppendLine();
                     sb.AppendLine("    private void AddDatas(string jsonData)");
                     sb.AppendLine("    {");
-                    sb.AppendLine("        base.AddDatas(JsonUtility.FromJson<Wrapper>(jsonData).Items);");
+                    sb.AppendLine("        var items = JsonUtility.FromJson<Wrapper>(jsonData).Items;");
+                    sb.AppendLine("        base.AddDatas(items);");
+                    sb.AppendLine();
+                    if (useGroups)
+                    {
+                        sb.AppendLine("        foreach (var item in items)");
+                        sb.AppendLine("        {");
+                        foreach (var singleMapping in singleMappings)
+                        {
+                            var singleMappingName = singleMapping.Replace(groupSingleSuffix, "");
+                            sb.AppendLine($"            if ({singleMappingName}Dict.ContainsKey(item.{singleMapping}))");
+                            sb.AppendLine($"            {{");
+                            sb.AppendLine($"                Debug.LogError($\"Duplicate key '{{item.{singleMapping}}}' found in {singleMappingName}Dict\");");
+                            sb.AppendLine("                 continue;");
+                            sb.AppendLine($"            }}");
+                            sb.AppendLine($"            {singleMappingName}Dict.Add(item.{singleMapping}, item);");
+                        }
+                        
+                        foreach (var listMapping in listMappings)
+                        {
+                            var listMappingName = listMapping.Replace(groupListSuffix, "");
+                            sb.AppendLine($"            if (!{listMappingName}Dict.ContainsKey(item.{listMapping}))");
+                            sb.AppendLine($"            {{");
+                            sb.AppendLine($"                {listMappingName}Dict[item.{listMapping}] = new List<{className}>();");
+                            sb.AppendLine($"            }}");
+                            sb.AppendLine($"            {listMappingName}Dict[item.{listMapping}].Add(item);");
+                        }
+                        sb.AppendLine("        }");
+                    }
                     sb.AppendLine("    }");
                     sb.AppendLine();
                     sb.AppendLine($"    [Serializable]");
@@ -687,7 +787,14 @@ public class ExcelToJson
             return false;
         }
     }
-
+    
+    private static string FirstCharLower(string str)
+    {
+        if (string.IsNullOrEmpty(str))
+            return str;
+        return char.ToLower(str[0]) + str.Substring(1);
+    }
+    
     static object ConvertToType(string value, string type, string variableName, string logFilePath, string excelPath, string sheetName)
     {
         try
